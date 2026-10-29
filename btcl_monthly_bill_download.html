@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Prevents ERR_BLOCKED_BY_CLIENT / Referrer issues when downloading from BTCL -->
+    <meta name="referrer" content="no-referrer">
+    <title>বিটিসিএল মাসিক বিল ও ইনভয়েস পোর্টাল</title>
+    
+    <!-- Google Fonts: Hind Siliguri & Noto Sans Bengali -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        bangla: ['"Hind Siliguri"', '"Noto Sans Bengali"', 'sans-serif'],
+                    },
+                    colors: {
+                        btcl: {
+                            green: '#006a4e',
+                            greenHover: '#00533d',
+                            teal: '#0a7e6c',
+                            lightBg: '#f0f9f6',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Hind Siliguri', 'Noto Sans Bengali', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 106, 78, 0.12);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between selection:bg-emerald-100 selection:text-emerald-900">
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-3xl w-full mx-auto px-4 py-5 space-y-4">
+
+        <!-- Compact Top Status Bar -->
+        <section class="bg-emerald-900 text-white rounded-xl px-4 py-2.5 shadow-sm border border-emerald-700/50 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+            <div class="flex items-center gap-2">
+                <i class="fa-regular fa-calendar-check text-emerald-300"></i>
+                <span id="liveCurrentDate" class="font-medium text-emerald-100">...</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-600/50 px-2.5 py-1 rounded-lg text-xs font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>চলতি সাইকেল: <strong id="currentCycleName" class="text-emerald-200">...</strong></span>
+                </span>
+                <span class="text-xs text-emerald-200">
+                    বাকী: <strong id="remainingDaysBadge" class="text-white bg-white/20 px-1.5 py-0.5 rounded font-mono">...</strong>
+                </span>
+            </div>
+        </section>
+
+        <!-- Bill Form Card -->
+        <section class="glass-card rounded-2xl shadow-md p-5 sm:p-7">
+            <form id="billForm" onsubmit="handleDownload(event)" class="space-y-5">
+                <!-- Dropdown Rows: Year & Billing Cycle Month -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Year Picker -->
+                    <div>
+                        <label for="billYear" class="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                            <i class="fa-regular fa-calendar text-btcl-green"></i>
+                            সাল (Year):
+                        </label>
+                        <div class="relative">
+                            <select id="billYear" onchange="onYearChange()" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-btcl-green focus:border-btcl-green block p-2.5 pr-8 outline-none transition appearance-none cursor-pointer">
+                                <!-- Populated dynamically by JS -->
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing Cycle Month Picker -->
+                    <div>
+                        <label for="billMonth" class="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                            <i class="fa-regular fa-calendar-days text-btcl-green"></i>
+                            বিলিং সাইকেল (Month):
+                        </label>
+                        <div class="relative">
+                            <select id="billMonth" onchange="onSelectionChange()" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-xl focus:ring-2 focus:ring-btcl-green focus:border-btcl-green block p-2.5 pr-8 outline-none transition appearance-none cursor-pointer">
+                                <!-- Dynamically populated based on 15th-day rule -->
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Billing Cycle Date Range -->
+                <div class="bg-emerald-50/80 border border-emerald-200/70 rounded-xl px-3.5 py-2 text-xs text-emerald-900 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-btcl-green text-sm shrink-0"></i>
+                    <div>
+                        <span>সাইকেল ব্যপ্তিকাল: </span>
+                        <strong id="cycleDateSpan" class="font-bold text-emerald-950">...</strong>
+                        <span class="text-slate-500 ml-1">(১৫ তারিখ হতে ১৫ তারিখ)</span>
+                    </div>
+                </div>
+
+                <!-- Customer ID / Phone Input -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label for="userIdentifier" class="block text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-id-card text-btcl-green"></i>
+                            সার্ভিস আইডি অথবা টেলিফোন নাম্বার:
+                        </label>
+                        <span id="detectedFormatBadge" class="hidden text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            যাচাইকৃত
+                        </span>
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                            <i class="fa-solid fa-keyboard text-sm"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="userIdentifier" 
+                            oninput="updateDisplayInvoice()" 
+                            placeholder="যেমন: 10025815@btcl অথবা 02478835566" 
+                            class="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-btcl-green focus:border-btcl-green focus:bg-white transition text-sm outline-none"
+                            autocomplete="off"
+                        >
+                        <button 
+                            type="button" 
+                            id="clearBtn" 
+                            onclick="clearInputField()" 
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 hidden"
+                            title="মুছে ফেলুন"
+                        >
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                        ইন্টারনেট সার্ভিস আইডি (যেমন: <strong class="text-slate-700">10025815</strong> বা <strong class="text-slate-700">10025815@btcl</strong> লিখুন)। টেলিফোন ইউজাররা পূর্ণ কোডসহ টেলিফোন নাম্বার (যেমন:<strong class="text-slate-700">02478835566</strong>) লিখুন।
+                    </p>
+                </div>
+
+                <!-- Invoice Number Display Box -->
+                <div class="bg-slate-100/90 border border-slate-200 rounded-xl p-3.5">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-receipt text-btcl-green"></i>
+                            সংশ্লিষ্ট মাসের ইনভয়েস নাম্বার (Invoice Number):
+                        </span>
+                        <span class="text-[11px] font-mono text-slate-500">RYYMMxxxxxxxxxxx</span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <div class="flex-grow bg-white border border-slate-300 rounded-lg px-3 py-2 flex items-center justify-between">
+                            <span id="invoiceNumberText" class="font-mono text-sm sm:text-base font-bold text-slate-900 tracking-wider break-all select-all">
+                                R2610xxxxxxxxxxx
+                            </span>
+                        </div>
+
+                        <button 
+                            type="button" 
+                            onclick="copyInvoiceNumber()" 
+                            class="shrink-0 py-2 px-3.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                        >
+                            <i class="fa-regular fa-copy"></i>
+                            <span>কপি</span>
+                        </button>
+                    </div>
+
+                    <p class="mt-2 text-[11px] text-emerald-800 font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                        <span>ইনভয়েস নাম্বারটি কপি করে সংশ্লিষ্ট মাসের বিল bKash/Nagad এ পে করুন</span>
+                    </p>
+                </div>
+
+                <!-- Alert / Status Notification -->
+                <div id="statusMessage" class="hidden rounded-xl p-3 text-xs sm:text-sm flex items-start gap-2 transition-all"></div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+                    <button 
+                        type="submit" 
+                        class="w-full sm:w-2/3 py-3 px-5 rounded-xl font-bold text-white bg-btcl-green hover:bg-btcl-greenHover active:scale-[0.99] shadow-md transition flex items-center justify-center gap-2 text-sm sm:text-base cursor-pointer"
+                    >
+                        <i class="fa-solid fa-file-arrow-down"></i>
+                        <span>বিল ডাউনলোড করুন (PDF)</span>
+                    </button>
+                    
+                    <button 
+                        type="button" 
+                        onclick="copyInvoiceNumber()" 
+                        class="w-full sm:w-1/3 py-3 px-4 rounded-xl font-semibold text-slate-700 bg-white border border-slate-300 hover:border-btcl-green hover:text-btcl-green active:scale-[0.99] transition flex items-center justify-center gap-2 text-sm cursor-pointer"
+                    >
+                        <i class="fa-solid fa-receipt"></i>
+                        <span>ইনভয়েস কপি করুন</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Instructions Card -->
+        <section class="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-3.5">
+            <div class="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i class="fa-solid fa-book-open text-btcl-green"></i>
+                <h3 class="text-sm sm:text-base font-bold text-slate-800">
+                    নির্দেশিকা
+                </h3>
+            </div>
+
+            <div class="bg-emerald-50/70 p-3 rounded-lg border border-emerald-100 text-slate-800 text-xs sm:text-sm leading-relaxed">
+                বিটিসিএল প্রতিমাসে গ্রাহকদের নিকট SMS এর মাধ্যমে মাসিক বিলের ডাউনলোড লিংক প্রেরণ করে। যেসব গ্রাহক নিয়মিত এসএমএস পাননি বা বিলের লিঙ্ক হারিয়ে ফেলেছেন, তারা এই ওয়েবসাইট থেকে বিলের পিডিএফ কপি ডাউনলোড করতে পারবেন।
+            </div>
+
+            <ol class="space-y-2 text-xs sm:text-sm text-slate-700 leading-relaxed list-none">
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-btcl-green shrink-0">১.</span>
+                    <span>আপনি যদি শুধু ইন্টারনেট ইউজার হয়ে থাকেন তাহলে আপনার সার্ভিস আইডি দিন (যেমন <span class="font-semibold text-slate-900 bg-slate-100 px-1 py-0.5 rounded">10025815@btcl</span>)। আর যদি ইন্টারনেটের সাথে বর্তমানে বা ইতঃপূর্বে টেলিফোন ব্যবহার করে থাকেন তাহলে টেলিফোন নাম্বারটি দিন (যেমন <span class="font-semibold text-slate-900 bg-slate-100 px-1 py-0.5 rounded">02478835566</span>)।</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-btcl-green shrink-0">২.</span>
+                    <span>বিল ডাউনলোড করার পর গ্রাহকের নাম্বার, বিলের মাস ইত্যাদি তথ্য সঠিক আছে কিনা যাচাই করে নিন।</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-btcl-green shrink-0">৩.</span>
+                    <span>সঠিক ভাবে সার্ভিস আইডি/টেলিফোন নাম্বার প্রদানের পর বিলটি ডাউনলোড করে bKash, Nagad বা নির্ধারিত ব্যাংকের মাধ্যমে পরিশোধ করুন।</span>
+                </li>
+            </ol>
+
+            <!-- Eye-Catching Safety Warning Card -->
+            <div class="relative overflow-hidden rounded-xl border-2 border-amber-400 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-4 shadow-sm">
+                <div class="absolute -right-4 -bottom-4 text-amber-200/40 text-7xl pointer-events-none select-none">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div class="relative z-10 space-y-2">
+                    <div class="flex items-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
+                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm animate-pulse">
+                            <i class="fa-solid fa-exclamation text-xs"></i>
+                        </span>
+                        <span class="tracking-wide">জরুরি বিল পরিশোধ ও নিরাপত্তা সতর্কতা:</span>
+                    </div>
+
+                    <ul class="space-y-1.5 text-xs sm:text-[13px] text-amber-950 leading-relaxed font-medium">
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-circle-check text-emerald-600 mt-1 shrink-0 text-xs"></i>
+                            <span>শুধুমাত্র বিটিসিএল এর অনুমোদিত ব্যাংক, <strong class="text-pink-700">bKash</strong> অথবা <strong class="text-orange-700">Nagad</strong> এর মাধ্যমে বিল পরিশোধ করুন।</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-circle-xmark text-rose-600 mt-1 shrink-0 text-xs"></i>
+                            <span><strong class="text-rose-700">বিটিসিএল এর অফিস থেকে সরাসরি বিলের টাকা গ্রহণ করে না।</strong> তাই কোনো ব্যক্তি বা এজেন্টের নিকট নগদ বিল প্রদান করা থেকে সম্পূর্ণ বিরত থাকুন।</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <i class="fa-solid fa-receipt text-amber-700 mt-1 shrink-0 text-xs"></i>
+                            <span>bKash, Nagad বা ব্যাংকে বিল পরিশোধের পর প্রাপ্ত ট্রানজ্যাকশন আইডি ও পরিশোধের ডিজিটাল কপি/রসিদ যথাযথভাবে সংরক্ষণ করুন।</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- MFS Payment Guides: bKash & Nagad -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <!-- bKash Guide -->
+                <div class="bg-pink-50/90 border border-pink-200/90 rounded-xl p-3 text-slate-800 text-xs sm:text-sm flex flex-col justify-between">
+                    <div>
+                        <div class="font-bold text-pink-700 mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-mobile-screen"></i>
+                            <span>বিকাশে পোস্টপেইড বিল পরিশোধের নিয়ম:</span>
+                        </div>
+                        <div class="font-mono text-xs text-slate-800 font-medium bg-white p-2.5 rounded-lg border border-pink-200/70 select-all leading-relaxed">
+                            bKash app &gt; Pay Bill &gt; Telephone &gt; BTCL (Postpaid) &gt; সংশ্লিষ্ট মাসের ইনভয়েস নাম্বার দিন &gt; পিন নাম্বার দিয়ে পেমেন্ট সম্পন্ন করুন।
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Nagad Guide -->
+                <div class="bg-orange-50/90 border border-orange-200/90 rounded-xl p-3 text-slate-800 text-xs sm:text-sm flex flex-col justify-between">
+                    <div>
+                        <div class="font-bold text-orange-700 mb-1.5 flex items-center gap-1.5">
+                            <i class="fa-solid fa-mobile-screen-button"></i>
+                            <span>নগদে পোস্টপেইড বিল পরিশোধের নিয়ম:</span>
+                        </div>
+                        <div class="font-mono text-xs text-slate-800 font-medium bg-white p-2.5 rounded-lg border border-orange-200/70 select-all leading-relaxed">
+                            Nagad app &gt; Bill Pay &gt; TV &amp; Telephone &gt; BTCL Phone &gt; সংশ্লিষ্ট মাসের ইনভয়েস নাম্বার দিন &gt; পিন নাম্বার দিয়ে পেমেন্ট সম্পন্ন করুন।
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-start gap-2 text-xs sm:text-sm text-slate-700">
+                <span class="font-bold text-btcl-green shrink-0">৪.</span>
+                <div>
+                    বিল ডাউনলোড করতে সমস্যা হলে সরাসরি অফিসে যোগাযোগ করুন অথবা Whatsapp এ সমস্যা জানিয়ে ম্যাসেজ দিন। Whatsapp Number: <span class="font-mono font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">01827750000</span>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <a 
+                    href="https://wa.me/8801827750000" 
+                    target="_blank" 
+                    rel="noreferrer noopener"
+                    referrerpolicy="no-referrer"
+                    class="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#20ba59] text-white px-4 py-2 rounded-lg font-semibold text-xs transition"
+                >
+                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                    <span>WhatsApp মেসেজ</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- Terms & Disclaimer -->
+        <section class="bg-slate-100/70 rounded-xl border border-slate-200 p-4 text-slate-600 text-xs space-y-1">
+            <div class="font-bold text-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-shield-halved text-btcl-teal"></i>
+                <span>দায়মুক্তি ও ব্যবহারের শর্তাবলী:</span>
+            </div>
+            <p class="leading-relaxed">
+                এই ওয়েব পোর্টালটি বাংলাদেশ টেলিকমিউনিকেশন্স কোম্পানি লিমিটেড (BTCL)-এর গ্রাহকদের মাসিক বিল সহজে ডাউনলোড ও পরিশোধের উদ্দ্যেশে তৈরি করা। এবং এটি কোনো প্রকার বাণিজ্যিক উদ্দেশ্যে পরিচালিত নয়।
+            </p>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-3.5 px-4 text-center text-xs text-slate-400">
+        গ্রাহক সহায়ক উন্মুক্ত টুল • মূল সেবা ও বিলের স্বত্বাধিকারী বাংলাদেশ টেলিকমিউনিকেশন্স কোম্পানি লিমিটেড (BTCL)
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const monthNames = [
+            { bn: "জানুয়ারি", en: "January", val: "01" },
+            { bn: "ফেব্রুয়ারি", en: "February", val: "02" },
+            { bn: "মার্চ", en: "March", val: "03" },
+            { bn: "এপ্রিল", en: "April", val: "04" },
+            { bn: "মে", en: "May", val: "05" },
+            { bn: "জুন", en: "June", val: "06" },
+            { bn: "জুলাই", en: "July", val: "07" },
+            { bn: "আগস্ট", en: "August", val: "08" },
+            { bn: "সেপ্টেম্বর", en: "September", val: "09" },
+            { bn: "অক্টোবর", en: "October", val: "10" },
+            { bn: "নভেম্বর", en: "November", val: "11" },
+            { bn: "ডিসেম্বর", en: "December", val: "12" }
+        ];
+
+        const banglaDays = ["রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার", "শনিবার"];
+
+        function convertToBanglaDigits(num) {
+            const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+            return num.toString().replace(/\d/g, d => banglaDigits[d]);
+        }
+
+        // Live Header & Cycle Tracker
+        // BTCL cycle runs from 15th to 15th:
+        // E.g., if today is <= 15th, current cycle ends on 15th of THIS month.
+        // If today is > 15th, current cycle ends on 15th of NEXT month.
+        function setupLiveDateAndCycleTracker() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const monthIndex = now.getMonth(); // 0 = Jan, 9 = Oct
+            const date = now.getDate();
+            const dayOfWeek = now.getDay();
+
+            // Date in Bangla
+            const dateStr = `${banglaDays[dayOfWeek]}, ${convertToBanglaDigits(date)} ${monthNames[monthIndex].bn} ${convertToBanglaDigits(year)}`;
+            document.getElementById('liveCurrentDate').textContent = dateStr;
+
+            let ongoingCycleMonthIndex;
+            let ongoingCycleYear = year;
+            let cycleEndDate;
+
+            if (date > 15) {
+                // E.g., Oct 29 -> ongoing cycle is November (Oct 15 - Nov 15)
+                ongoingCycleMonthIndex = (monthIndex + 1) % 12;
+                if (monthIndex === 11) ongoingCycleYear = year + 1;
+                cycleEndDate = new Date(ongoingCycleYear, ongoingCycleMonthIndex, 15);
+            } else {
+                // E.g., Oct 10 -> ongoing cycle is October (Sep 15 - Oct 15)
+                ongoingCycleMonthIndex = monthIndex;
+                cycleEndDate = new Date(year, monthIndex, 15);
+            }
+
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const remainingDays = Math.max(0, Math.ceil((cycleEndDate.getTime() - now.getTime()) / msPerDay));
+
+            document.getElementById('currentCycleName').textContent = `${monthNames[ongoingCycleMonthIndex].bn} (${convertToBanglaDigits(remainingDays)} দিন বাকি)`;
+            document.getElementById('remainingDaysBadge').textContent = `${convertToBanglaDigits(remainingDays)} দিন`;
+
+            return {
+                todayDate: date,
+                todayMonthIndex: monthIndex,
+                todayYear: year
+            };
+        }
+
+        // Dropdown setup: Auto-hide uncompleted billing cycle
+        // If today is <= 15, current month cycle (ending on 15th) is not complete.
+        // Therefore, for current year, maximum available month index is todayMonthIndex - 1.
+        // If today is > 15, current month cycle is completed, so maximum available is todayMonthIndex.
+        function initializeYearDropdown() {
+            const yearSelect = document.getElementById('billYear');
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const minYear = 2020;
+
+            yearSelect.innerHTML = '';
+            for (let y = currentYear; y >= minYear; y--) {
+                const opt = document.createElement('option');
+                opt.value = y.toString().slice(-2); // 'YY'
+                opt.dataset.fullYear = y;
+                opt.textContent = `${convertToBanglaDigits(y)} (${y})`;
+                yearSelect.appendChild(opt);
+            }
+
+            populateMonthDropdown();
+        }
+
+        function populateMonthDropdown() {
+            const yearSelect = document.getElementById('billYear');
+            const monthSelect = document.getElementById('billMonth');
+            const selectedFullYear = parseInt(yearSelect.options[yearSelect.selectedIndex].dataset.fullYear, 10);
+
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonthIdx = now.getMonth();
+            const currentDate = now.getDate();
+
+            // Calculate max available month index for selected year
+            let maxMonthIndex = 11; // for past years, all 12 months available
+
+            if (selectedFullYear === currentYear) {
+                // If today <= 15, current month cycle is NOT over, so hide current month!
+                // Available up to previous month (currentMonthIdx - 1)
+                // If today > 15, current month cycle IS over, available up to currentMonthIdx
+                if (currentDate <= 15) {
+                    maxMonthIndex = currentMonthIdx - 1;
+                } else {
+                    maxMonthIndex = currentMonthIdx;
+                }
+            } else if (selectedFullYear > currentYear) {
+                maxMonthIndex = -1; // Future year, no months ready
+            }
+
+            monthSelect.innerHTML = '';
+
+            // If selected year has no available months (e.g. early Jan before Jan 15)
+            if (maxMonthIndex < 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = "কোনো সমাপ্ত বিলিং সাইকেল নেই";
+                monthSelect.appendChild(opt);
+            } else {
+                for (let i = 0; i <= maxMonthIndex; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = monthNames[i].val;
+                    opt.textContent = `${monthNames[i].bn} - ${monthNames[i].en}`;
+                    monthSelect.appendChild(opt);
+                }
+                // Auto-select latest available month (last in the list)
+                monthSelect.selectedIndex = monthSelect.options.length - 1;
+            }
+
+            onSelectionChange();
+        }
+
+        function onYearChange() {
+            populateMonthDropdown();
+        }
+
+        // Update cycle span label
+        function updateCycleDateSpan() {
+            const monthVal = document.getElementById('billMonth').value;
+            if (!monthVal) {
+                document.getElementById('cycleDateSpan').textContent = "প্রযোজ্য নয়";
+                return;
+            }
+            const currentMonthIdx = parseInt(monthVal, 10) - 1;
+            const prevMonthIdx = (currentMonthIdx - 1 + 12) % 12;
+
+            const prevMonthName = monthNames[prevMonthIdx].bn;
+            const currentMonthName = monthNames[currentMonthIdx].bn;
+
+            document.getElementById('cycleDateSpan').textContent = `১৫ ${prevMonthName} হতে ১৫ ${currentMonthName}`;
+        }
+
+        function sanitizeIdentifier(rawInput) {
+            if (!rawInput) return '';
+            let cleaned = rawInput.trim();
+            if (cleaned.includes('@')) {
+                cleaned = cleaned.split('@')[0].trim();
+            }
+            return cleaned.replace(/[^a-zA-Z0-9]/g, '');
+        }
+
+        function getInvoiceDetails() {
+            const yearVal = document.getElementById('billYear').value;
+            const monthVal = document.getElementById('billMonth').value;
+            const inputVal = document.getElementById('userIdentifier').value;
+            const cleanedId = sanitizeIdentifier(inputVal);
+
+            const displayId = cleanedId || 'xxxxxxxxxxx';
+            const invoiceNumber = `R${yearVal}${monthVal}${displayId}`;
+            const downloadUrl = `https://mybtcl.btcl.gov.bd/bill/R${yearVal}${monthVal}${cleanedId}.pdf`;
+
+            return {
+                invoiceNumber: invoiceNumber,
+                downloadUrl: downloadUrl,
+                isValid: cleanedId.length >= 5 && !!monthVal,
+                cleanedId: cleanedId,
+                yearVal: yearVal,
+                monthVal: monthVal
+            };
+        }
+
+        function updateDisplayInvoice() {
+            const info = getInvoiceDetails();
+            const invoiceEl = document.getElementById('invoiceNumberText');
+            const badgeEl = document.getElementById('detectedFormatBadge');
+            const clearBtn = document.getElementById('clearBtn');
+            const rawVal = document.getElementById('userIdentifier').value.trim();
+
+            invoiceEl.textContent = info.invoiceNumber;
+
+            if (rawVal.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            if (info.isValid) {
+                badgeEl.classList.remove('hidden');
+                badgeEl.textContent = (info.cleanedId.startsWith('02') || info.cleanedId.length >= 10) ? 'টেলিফোন' : 'সার্ভিস আইডি';
+            } else {
+                badgeEl.classList.add('hidden');
+            }
+        }
+
+        function onSelectionChange() {
+            updateCycleDateSpan();
+            updateDisplayInvoice();
+        }
+
+        function clearInputField() {
+            const input = document.getElementById('userIdentifier');
+            input.value = '';
+            input.focus();
+            updateDisplayInvoice();
+            hideMessage();
+        }
+
+        function showMessage(text, isError = false) {
+            const msgBox = document.getElementById('statusMessage');
+            msgBox.classList.remove('hidden');
+
+            if (isError) {
+                msgBox.className = "rounded-xl p-3 text-xs sm:text-sm flex items-start gap-2 transition-all bg-red-50 text-red-700 border border-red-200";
+                msgBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mt-0.5 text-red-500"></i><div>${text}</div>`;
+            } else {
+                msgBox.className = "rounded-xl p-3 text-xs sm:text-sm flex items-start gap-2 transition-all bg-emerald-50 text-emerald-800 border border-emerald-200";
+                msgBox.innerHTML = `<i class="fa-solid fa-circle-check mt-0.5 text-emerald-600"></i><div>${text}</div>`;
+            }
+
+            if (!isError) {
+                setTimeout(() => hideMessage(), 4000);
+            }
+        }
+
+        function hideMessage() {
+            document.getElementById('statusMessage').classList.add('hidden');
+        }
+
+        function copyInvoiceNumber() {
+            const info = getInvoiceDetails();
+            if (!info.isValid) {
+                showMessage('অনুগ্রহ করে প্রথমে আপনার সার্ভিস আইডি অথবা টেলিফোন নাম্বারটি লিখুন।', true);
+                document.getElementById('userIdentifier').focus();
+                return;
+            }
+
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = info.invoiceNumber;
+            dummy.select();
+            try {
+                document.execCommand("copy");
+                showMessage(`ইনভয়েস নাম্বার <strong>${info.invoiceNumber}</strong> কপি হয়েছে!`);
+            } catch (err) {
+                showMessage('কপি করতে সমস্যা হয়েছে। ম্যানুয়ালি কপি করুন।', true);
+            }
+            document.body.removeChild(dummy);
+        }
+
+        function handleDownload(e) {
+            if (e) e.preventDefault();
+            const info = getInvoiceDetails();
+
+            if (!info.isValid) {
+                showMessage('অনুগ্রহ করে সঠিক সার্ভিস আইডি (যেমন: 10025815@btcl) অথবা টেলিফোন নাম্বার (যেমন: 02478835566) প্রদান করুন।', true);
+                document.getElementById('userIdentifier').focus();
+                return;
+            }
+
+            hideMessage();
+            showMessage(`পিডিএফ ডাউনলোড হচ্ছে... নতুন ট্যাবে ফাইল ওপেন না হলে পপ-আপ অনুমোদন করুন।`);
+
+            const anchor = document.createElement('a');
+            anchor.href = info.downloadUrl;
+            anchor.target = '_blank';
+            anchor.rel = 'noreferrer noopener';
+            anchor.referrerPolicy = 'no-referrer';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+        }
+
+        window.onload = function() {
+            setupLiveDateAndCycleTracker();
+            initializeYearDropdown();
+        };
+    </script>
+</body>
+</html>
